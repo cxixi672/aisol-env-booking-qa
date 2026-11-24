@@ -22,3 +22,7 @@ python3 waitlist/regression.py --url http://127.0.0.1:18063
 ### 浏览器复现
 
 启动独立桩 `python3 waitlist/contract_stub.py 18063`，按 Web 工程说明设置 `DEV_API_TARGET=http://127.0.0.1:18063` 并在独立 loopback 端口打开候补页。先准备前半段预约与后半段维护，然后以 bob 和 carol 在页面分别查询、候补同一整小时。释放前半段、释放后半段、重复释放、释放晋升预约后分别刷新。核对页面的本人队项、状态和晋升预约号，核对 Network 每次 GET/POST 的身份、参数、响应和 Console 错误。真实联调时改接版本已固定的 API。
+
+### 核对真实数据库终态
+
+在业务 API 所用的同一专用数据库上执行 HTTP 回归后，切到本轮 API 仓根目录，使用该仓锁定的驱动与 sqrl 依赖运行 `go run /绝对路径/qa-waitlist/waitlist/dbcheck.go -day 2030-01-02`。从本机配置注入 MYSQL_DSN。检查器对两天分别核对 3 条已撤预约、1 条已撤维护、2 条已晋升队项及双向唯一关联、身份和时间边界。库中应只含本次样例在对应范围内的数据。
