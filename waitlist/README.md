@@ -26,3 +26,5 @@ python3 waitlist/regression.py --url http://127.0.0.1:18063
 ### 核对真实数据库终态
 
 在业务 API 所用的同一专用数据库上执行 HTTP 回归后，切到本轮 API 仓根目录，使用该仓锁定的驱动与 sqrl 依赖运行 `go run /绝对路径/qa-waitlist/waitlist/dbcheck.go -day 2030-01-02`。从本机配置注入 MYSQL_DSN。检查器对两天分别核对 3 条已撤预约、1 条已撤维护、2 条已晋升队项及双向唯一关联、身份和时间边界。库中应只含本次样例在对应范围内的数据。
+
+`python3 waitlist/routes/run.py /绝对路径/API候测工作树` 用 Go overlay 将 QA 测试加载到候测模块，通过实际 Gin 注册函数执行六个请求，核验身份、幂等键、区间和查询参数拦截。请求应在访问仓储前得到拒绝，可在无数据库时执行。
