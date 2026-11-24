@@ -57,10 +57,22 @@ func readRun(path string) (map[identity]*record, error) {
 		if _, exists := keys[k]; !exists {
 			keys[k] = nil
 		}
-		if exchange.Status == 201 {
-			var response struct{ Data record }
-			if err := json.Unmarshal([]byte(exchange.Response), &response); err != nil {
-				return nil, err
+		if exchange.Status != 200 {
+			return nil, fmt.Errorf("unexpected HTTP status %d", exchange.Status)
+		}
+		var response struct {
+			Code string
+			Data record
+		}
+		if err := json.Unmarshal([]byte(exchange.Response), &response); err != nil {
+			return nil, err
+		}
+		if response.Code == "" {
+			return nil, errors.New("missing business code")
+		}
+		if response.Code == "000000" {
+			if response.Data.ID == "" || (keys[k] != nil && *keys[k] != response.Data) {
+				return nil, errors.New("missing ID or inconsistent successful replay")
 			}
 			keys[k] = &response.Data
 		}

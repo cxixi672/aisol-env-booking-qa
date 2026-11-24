@@ -35,46 +35,46 @@ class Fixture:
     def handle(self, method, route, user, key, slot):
         _, prefix, resource, *ids = route.split('/')
         if prefix != 'api' or resource not in self.rows:
-            return 404, 'NOT_FOUND', None
+            return 'NOT_FOUND', None
         if user not in ('alice', 'bob', 'carol', 'admin'):
-            return 403, 'FORBIDDEN', None
+            return 'FORBIDDEN', None
         if method != 'GET' and resource == 'maintenance' and user != 'admin':
-            return 403, 'FORBIDDEN', None
+            return 'FORBIDDEN', None
         if method == 'DELETE' and ids and resource != 'waitlist':
             row = next((r for r in self.rows[resource] if r['id'] == ids[0]), None)
             if row is None:
-                return 404, 'NOT_FOUND', None
+                return 'NOT_FOUND', None
             if resource == 'bookings' and row['user'] != user:
-                return 403, 'FORBIDDEN', None
+                return 'FORBIDDEN', None
             if row['status'] == 'active':
                 row['status'] = 'cancelled'
                 self.release(row['env'])
-            return 200, '000000', row
+            return '000000', row
         if (set(slot) != {'env', 'start', 'end'} or slot['env'] not in ('env-a', 'env-b')
                 or slot['start'] >= slot['end'] or (method == 'POST' and not key)):
-            return 400, 'INVALID_INPUT', None
+            return 'INVALID_INPUT', None
         if method == 'GET':
-            return 200, '000000', [r for r in self.overlaps(resource, slot)
+            return '000000', [r for r in self.overlaps(resource, slot)
                                    if resource != 'waitlist' or r['user'] == user]
         token = (user, resource, key)
         if token in self.created:
             payload, original = self.created[token]
             if payload != slot:
-                return 409, 'KEY_REUSED', None
-            return 200, '000000', original
+                return 'KEY_REUSED', None
+            return '000000', original
         if resource == 'waitlist':
             if not self.blocked(slot):
-                return 409, 'SLOT_AVAILABLE', None
+                return 'SLOT_AVAILABLE', None
             for r in self.rows[resource]:
                 if r['user'] == user and r['status'] == 'waiting' and all(r[k] == v for k, v in slot.items()):
-                    return 409, 'ALREADY_WAITING', None
+                    return 'ALREADY_WAITING', None
         elif self.overlaps('bookings', slot):
-            return 409, 'BOOKING_CONFLICT', None
+            return 'BOOKING_CONFLICT', None
         elif self.overlaps('maintenance', slot):
-            return 409, 'MAINTENANCE_CONFLICT', None
+            return 'MAINTENANCE_CONFLICT', None
         row = self.insert(resource, slot, user, 'waiting' if resource == 'waitlist' else 'active')
         self.created[token] = (slot.copy(), row.copy())
-        return 201, '000000', row
+        return '000000', row
 
 
 def server(port):
@@ -86,12 +86,12 @@ def server(port):
             slot = dict(parse_qsl(url.query))
             if self.command == 'POST':
                 slot = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-            status, code, data = fixture.handle(self.command, url.path, self.headers.get('X-User'),
+            code, data = fixture.handle(self.command, url.path, self.headers.get('X-User'),
                                                 self.headers.get('Idempotency-Key'), slot)
             descriptions = {'000000': 'OK', 'BOOKING_CONFLICT': '时段已有预约',
                             'SLOT_AVAILABLE': '时段可预约', 'ALREADY_WAITING': '已在候补队列'}
             body = json.dumps(dict(code=code, desc=descriptions.get(code, code), data=data)).encode()
-            self.send_response(status)
+            self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()

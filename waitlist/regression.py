@@ -22,7 +22,7 @@ class Client:
         self.url = url.rstrip('/') + '/api/'
         self.prefix = uuid4().hex
 
-    def call(self, method, route, user, payload, status, code='000000', key=None):
+    def call(self, method, route, user, payload, code='000000', key=None):
         url = self.url + route
         if method == 'GET':
             url += '?' + urlencode(payload)
@@ -41,18 +41,18 @@ class Client:
             raw = response.read().decode()
             print(json.dumps(dict(method=method, url=url, headers=headers, payload=payload,
                                   status=response.status, response=raw), ensure_ascii=False), flush=True)
-            expect(response.status, status)
+            expect(response.status, 200)
             envelope = json.loads(raw)
             expect(envelope['code'], code)
-            if status >= 400:
-                expect(envelope['data'], None)
+            if code != '000000':
+                expect(envelope.get('data'), None)
                 expect(isinstance(envelope['desc'], str) and bool(envelope['desc']), True)
             else:
                 expect(envelope['desc'], 'OK')
-            return envelope['data']
+            return envelope['data'] if code == '000000' else None
 
     def add(self, resource, user, slot, key):
-        row = self.call('POST', resource, user, slot, 201, key=key)
+        row = self.call('POST', resource, user, slot, key=key)
         expected = 'waiting' if resource == 'waitlist' else 'active'
         for field, value in dict(slot, user=user, status=expected).items():
             expect(row[field], value)
@@ -60,12 +60,12 @@ class Client:
         return row
 
     def rows(self, resource, user, slot):
-        rows = self.call('GET', resource, user, slot, 200)
+        rows = self.call('GET', resource, user, slot)
         expect(isinstance(rows, list), True)
         return rows
 
     def cancel(self, resource, row):
-        result = self.call('DELETE', resource + '/' + row['id'], row['user'], None, 200)
+        result = self.call('DELETE', resource + '/' + row['id'], row['user'], None)
         expect(result, dict(row, status='cancelled'))
 
 
@@ -82,15 +82,15 @@ def main_case(c, day):
         for user in (('alice', 'bob', 'carol', 'admin') if resource == 'waitlist' else ('admin',)):
             expect(c.rows(resource, user, full), [])
     for user in (None, 'unknown'):
-        c.call('GET', 'waitlist', user, full, 403, 'FORBIDDEN')
-    c.call('POST', 'waitlist', 'bob', full, 400, 'INVALID_INPUT')
-    c.call('POST', 'waitlist', 'bob', full, 409, 'SLOT_AVAILABLE', 'available')
+        c.call('GET', 'waitlist', user, full, 'FORBIDDEN')
+    c.call('POST', 'waitlist', 'bob', full, 'INVALID_INPUT')
+    c.call('POST', 'waitlist', 'bob', full, 'SLOT_AVAILABLE', 'available')
     booking = c.add('bookings', 'alice', first, 'alice')
     maint = c.add('maintenance', 'admin', second, 'half')
     bob = c.add('waitlist', 'bob', full, 'bob')
-    expect(c.call('POST', 'waitlist', 'bob', full, 200, key='bob'), bob)
-    c.call('POST', 'waitlist', 'bob', first, 409, 'KEY_REUSED', 'bob')
-    c.call('POST', 'waitlist', 'bob', full, 409, 'ALREADY_WAITING', 'again')
+    expect(c.call('POST', 'waitlist', 'bob', full, key='bob'), bob)
+    c.call('POST', 'waitlist', 'bob', first, 'KEY_REUSED', 'bob')
+    c.call('POST', 'waitlist', 'bob', full, 'ALREADY_WAITING', 'again')
     carol = c.add('waitlist', 'carol', full, 'carol')
     expect(bob['id'] != carol['id'], True)
 
@@ -115,8 +115,8 @@ def main_case(c, day):
     states('waiting', 'waiting')
     expect(c.rows('waitlist', 'bob', dict(full, env='env-b')), [])
     expect(c.rows('waitlist', 'bob', dict(full, start=full['end'], end=full['end'].replace('11:', '12:'))), [])
-    c.call('DELETE', 'bookings/' + booking['id'], 'bob', None, 403, 'FORBIDDEN')
-    c.call('DELETE', 'maintenance/' + maint['id'], 'carol', None, 403, 'FORBIDDEN')
+    c.call('DELETE', 'bookings/' + booking['id'], 'bob', None, 'FORBIDDEN')
+    c.call('DELETE', 'maintenance/' + maint['id'], 'carol', None, 'FORBIDDEN')
     expect(c.rows('bookings', 'admin', full), [booking])
     expect(c.rows('maintenance', 'admin', full), [maint])
     c.cancel('bookings', booking)

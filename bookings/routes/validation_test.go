@@ -19,16 +19,15 @@ func TestDIWU70Guards(t *testing.T) {
 	const body = `{"env":"env-a","start":"2030-01-02T10:00:00Z","end":"2030-01-02T11:00:00Z"}`
 	for _, tc := range []struct {
 		name, method, path, user, key, input string
-		status                               int
 		code                                 string
 	}{
-		{"missing-user", "GET", path, "", "", "", 403, "FORBIDDEN"},
-		{"unknown-user", "POST", path, "guest", "k", body, 403, "FORBIDDEN"},
-		{"no-key", "POST", path, "alice", "", body, 400, "INVALID_INPUT"},
-		{"empty-slot", "POST", path, "alice", "k", strings.Replace(body, "11:00", "10:00", 1), 400, "INVALID_INPUT"},
-		{"unknown-env", "POST", path, "alice", "k", strings.Replace(body, "env-a", "env-c", 1), 400, "INVALID_INPUT"},
-		{"missing-range", "GET", path + "?env=env-a", "alice", "", "", 400, "INVALID_INPUT"},
-		{"invalid-id", "DELETE", path + "/0", "alice", "", "", 400, "INVALID_INPUT"},
+		{"missing-user", "GET", path, "", "", "", "FORBIDDEN"},
+		{"unknown-user", "POST", path, "guest", "k", body, "FORBIDDEN"},
+		{"no-key", "POST", path, "alice", "", body, "INVALID_INPUT"},
+		{"empty-slot", "POST", path, "alice", "k", strings.Replace(body, "11:00", "10:00", 1), "INVALID_INPUT"},
+		{"unknown-env", "POST", path, "alice", "k", strings.Replace(body, "env-a", "env-c", 1), "INVALID_INPUT"},
+		{"missing-range", "GET", path + "?env=env-a", "alice", "", "", "INVALID_INPUT"},
+		{"invalid-id", "DELETE", path + "/0", "alice", "", "", "INVALID_INPUT"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.input))
@@ -48,7 +47,7 @@ func TestDIWU70Guards(t *testing.T) {
 				Code, Desc string
 				Data       json.RawMessage
 			}
-			if json.Unmarshal(w.Body.Bytes(), &env) != nil || w.Code != tc.status || env.Code != tc.code || env.Desc == "" || string(env.Data) != "null" {
+			if json.Unmarshal(w.Body.Bytes(), &env) != nil || w.Code != 200 || env.Code != tc.code || env.Desc == "" || (len(env.Data) != 0 && string(env.Data) != "null") {
 				t.Fatal("unexpected rejection envelope")
 			}
 		})

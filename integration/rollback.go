@@ -31,7 +31,7 @@ type fixture struct {
 	slot      map[string]string
 }
 
-func (f fixture) request(method, path, user string, expected int) (record, error) {
+func (f fixture) request(method, path, user string, expected string) (record, error) {
 	var payload []byte
 	if method == "POST" {
 		var err error
@@ -60,16 +60,16 @@ func (f fixture) request(method, path, user string, expected int) (record, error
 	if err = json.Unmarshal(body, &result); err != nil {
 		return record{}, err
 	}
-	if resp.StatusCode != expected {
-		return record{}, fmt.Errorf("%s %s: HTTP %d code %s, expected %d", method, path, resp.StatusCode, result.Code, expected)
+	if resp.StatusCode != http.StatusOK || result.Code != expected {
+		return record{}, fmt.Errorf("%s %s: HTTP %d code %q, expected 200 %q", method, path, resp.StatusCode, result.Code, expected)
 	}
-	if expected == 500 {
+	if expected != "000000" {
+		if len(result.Data) != 0 && string(result.Data) != "null" {
+			return record{}, errors.New("unexpected error payload")
+		}
 		return record{}, nil
 	}
 	var r record
-	if result.Code != "000000" {
-		return r, fmt.Errorf("unexpected code %s", result.Code)
-	}
 	if err = json.Unmarshal(result.Data, &r); err != nil {
 		return r, err
 	}
@@ -98,11 +98,11 @@ func (f fixture) state(table, id string) (string, error) {
 
 func (f fixture) check() (err error) {
 	// Use a fresh, migrated isolated test database with no active bookings or queue for this slot.
-	booking, err := f.request("POST", "/bookings", "alice", 201)
+	booking, err := f.request("POST", "/bookings", "alice", "000000")
 	if err != nil {
 		return err
 	}
-	q, err := f.request("POST", "/waitlist", "bob", 201)
+	q, err := f.request("POST", "/waitlist", "bob", "000000")
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (f fixture) check() (err error) {
 	}
 	defer func() { err = errors.Join(err, cleanup()) }()
 	path := "/bookings/" + booking.ID
-	if _, err = f.request("DELETE", path, "alice", 500); err != nil {
+	if _, err = f.request("DELETE", path, "alice", "INTERNAL_ERROR"); err != nil {
 		return err
 	}
 	for _, check := range []struct{ table, id, want string }{{"bookings", booking.ID, "active"}, {"waitlist", q.ID, "waiting"}} {
@@ -139,7 +139,7 @@ func (f fixture) check() (err error) {
 	if err = cleanup(); err != nil {
 		return err
 	}
-	if _, err = f.request("DELETE", path, "alice", 200); err != nil {
+	if _, err = f.request("DELETE", path, "alice", "000000"); err != nil {
 		return err
 	}
 	query, args, err := sqrl.Select("booking_id").From("waitlist").Where(sqrl.Eq{"id": q.ID, "status": "promoted"}).ToSql()
@@ -150,7 +150,7 @@ func (f fixture) check() (err error) {
 	if err = f.db.QueryRowContext(f.ctx, query, args...).Scan(&promoted); err != nil {
 		return err
 	}
-	_, err = f.request("DELETE", "/bookings/"+promoted, "bob", 200)
+	_, err = f.request("DELETE", "/bookings/"+promoted, "bob", "000000")
 	return err
 }
 func main() {

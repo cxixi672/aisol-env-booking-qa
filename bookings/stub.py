@@ -37,41 +37,41 @@ class BookingFixture(ThreadingHTTPServer):
     def dispatch(self, method, url, user, key, body):
         path = urlsplit(url)
         if user not in USERS:
-            return 403, "FORBIDDEN", None
+            return "FORBIDDEN", None
         if method == "DELETE" and path.path.startswith(ROUTE + "/"):
             row = self.rows.get(path.path[len(ROUTE) + 1:])
             if row is None:
-                return 404, "NOT_FOUND", None
+                return "NOT_FOUND", None
             if row["user"] != user:
-                return 403, "FORBIDDEN", None
+                return "FORBIDDEN", None
             row["status"] = "cancelled"
-            return 200, "000000", row.copy()
+            return "000000", row.copy()
         if path.path != ROUTE:
-            return 404, "NOT_FOUND", None
+            return "NOT_FOUND", None
         if method == "GET":
             body = {k: v[0] for k, v in parse_qs(path.query).items()}
         body = normalize_slot(body)
         if body is None or (method == "POST" and not key):
-            return 400, "INVALID_INPUT", None
+            return "INVALID_INPUT", None
         overlaps = [r.copy() for r in self.rows.values() if r["env"] == body["env"]
                     and r["status"] == "active" and r["start"] < body["end"] and body["start"] < r["end"]]
         if method == "GET":
-            return 200, "000000", overlaps
+            return "000000", overlaps
         if method != "POST":
-            return 404, "NOT_FOUND", None
+            return "NOT_FOUND", None
         previous = self.replays.get((user, key))
         if previous:
             payload, row = previous
             if payload != body:
-                return 409, "KEY_REUSED", None
-            return 200, "000000", row
+                return "KEY_REUSED", None
+            return "000000", row
         if overlaps:
-            return 409, "BOOKING_CONFLICT", None
+            return "BOOKING_CONFLICT", None
         rid = str(len(self.rows) + 1)
         row = dict(body, id=rid, user=user, status="active")
         self.rows[rid] = row
         self.replays[user, key] = (body, row.copy())
-        return 201, "000000", row
+        return "000000", row
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -80,14 +80,13 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(size)) if size else None
             with self.server.lock:
-                status, code, data = self.server.dispatch(self.command, self.path,
+                code, data = self.server.dispatch(self.command, self.path,
                     self.headers.get("X-User"), self.headers.get("Idempotency-Key"), body)
                 descriptions = {"000000": "OK", "BOOKING_CONFLICT": "时段已有预约"}
                 raw = json.dumps(dict(code=code, desc=descriptions.get(code, code), data=data)).encode()
         except (ValueError, UnicodeError):
-            status = 400
             raw = b'{"code":"INVALID_INPUT","desc":"Invalid JSON","data":null}'
-        self.send_response(status)
+        self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()

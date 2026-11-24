@@ -42,23 +42,23 @@ def run(base):
                               http=result[0], response=result[1]), ensure_ascii=False), flush=True)
         return result
 
-    def check(result, status, code="000000"):
+    def check(result, code="000000"):
         actual, obj = result
-        assert (actual, obj["code"]) == (status, code), result
+        assert (actual, obj["code"]) == (200, code), result
         assert isinstance(obj["desc"], str) and obj["desc"], result
         if code == "000000":
             assert obj["desc"] == "OK", result
         else:
-            assert obj["data"] is None, result
+            assert obj.get("data") is None, result
             if code == "BOOKING_CONFLICT":
                 assert obj["desc"] == "时段已有预约", result
-        return obj["data"]
+        return obj["data"] if code == "000000" else None
 
     def listed(resource, interval=A):
-        return check(request("GET", resource, "alice", interval), 200)
+        return check(request("GET", resource, "alice", interval))
 
     def created(result, interval, user):
-        record = check(result, 201)
+        record = check(result)
         assert isinstance(record["id"], str) and record["id"], record
         for field, value in dict(interval, user=user, status="active").items():
             assert record[field] == value, record
@@ -67,7 +67,7 @@ def run(base):
     def cancel(resource, record):
         expected = dict(record, status="cancelled")
         result = request("DELETE", resource + "/" + record["id"], record["user"])
-        assert check(result, 200) == expected
+        assert check(result) == expected
 
     m, b = "maintenance", "bookings"
     for resource in (m, b):
@@ -75,17 +75,17 @@ def run(base):
             assert listed(resource, window) == [], "use a clean test database"
 
     for user in (None, "unknown", "alice"):
-        check(request("POST", m, user, A, "deny"), 403, "FORBIDDEN")
-    check(request("GET", m, None, A), 403, "FORBIDDEN")
-    check(request("GET", m, "alice", {"env": "env-a"}), 400, "INVALID_INPUT")
-    check(request("POST", m, "admin", A), 400, "INVALID_INPUT")
-    check(request("POST", m, "admin", dict(A, start=A["end"]), "zero"), 400, "INVALID_INPUT")
+        check(request("POST", m, user, A, "deny"), "FORBIDDEN")
+    check(request("GET", m, None, A), "FORBIDDEN")
+    check(request("GET", m, "alice", {"env": "env-a"}), "INVALID_INPUT")
+    check(request("POST", m, "admin", A), "INVALID_INPUT")
+    check(request("POST", m, "admin", dict(A, start=A["end"]), "zero"), "INVALID_INPUT")
     win = created(request("POST", m, "admin", A, "window"), A, "admin")
-    assert check(request("POST", m, "admin", A, "window"), 200) == win
-    check(request("POST", m, "admin", B, "window"), 409, "KEY_REUSED")
-    check(request("POST", m, "admin", A, "overlap"), 409, "MAINTENANCE_CONFLICT")
-    check(request("POST", b, "alice", A, "blocked"), 409, "MAINTENANCE_CONFLICT")
-    check(request("DELETE", m + "/" + win["id"], "bob"), 403, "FORBIDDEN")
+    assert check(request("POST", m, "admin", A, "window")) == win
+    check(request("POST", m, "admin", B, "window"), "KEY_REUSED")
+    check(request("POST", m, "admin", A, "overlap"), "MAINTENANCE_CONFLICT")
+    check(request("POST", b, "alice", A, "blocked"), "MAINTENANCE_CONFLICT")
+    check(request("DELETE", m + "/" + win["id"], "bob"), "FORBIDDEN")
     assert listed(m) == [win] and listed(b) == []
     assert listed(m, dict(A, start="2030-01-02T10:30:00Z")) == [win]
     assert listed(m, NEXT) == [] and listed(m, B) == []
@@ -96,7 +96,7 @@ def run(base):
     cancel(m, win)
     assert listed(m) == []
     booking = created(request("POST", b, "alice", A, "existing"), A, "alice")
-    check(request("POST", m, "admin", A, "existing-conflict"), 409, "BOOKING_CONFLICT")
+    check(request("POST", m, "admin", A, "existing-conflict"), "BOOKING_CONFLICT")
     assert listed(b) == [booking] and listed(m) == []
     cancel(b, booking)
 
@@ -110,13 +110,13 @@ def run(base):
         first = pool.submit(race, m, "admin")
         second = pool.submit(race, b, "alice")
         maintenance, booking = first.result(), second.result()
-    if maintenance[0] == 201:
+    if maintenance[1]["code"] == "000000":
         winner = created(maintenance, A, "admin")
-        check(booking, 409, "MAINTENANCE_CONFLICT")
+        check(booking, "MAINTENANCE_CONFLICT")
         kind, other = m, b
     else:
         winner = created(booking, A, "alice")
-        check(maintenance, 409, "BOOKING_CONFLICT")
+        check(maintenance, "BOOKING_CONFLICT")
         kind, other = b, m
     assert listed(kind) == [winner] and listed(other) == []
     cancel(kind, winner)

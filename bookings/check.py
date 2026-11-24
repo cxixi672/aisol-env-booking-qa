@@ -52,17 +52,17 @@ def run(base):
         finally:
             conn.close()
 
-    def expect(reply, status, code="000000"):
+    def expect(reply, code="000000"):
         actual, env = reply
-        require((actual, env.get("code")) == (status, code), f"expected {status} {code}, got {reply}")
-        require(isinstance(env.get("desc"), str) and "data" in env, f"invalid envelope {env}")
+        require((actual, env.get("code")) == (200, code), f"expected 200 {code}, got {reply}")
+        require(isinstance(env.get("desc"), str) and bool(env["desc"]), f"invalid envelope {env}")
         if code == "000000":
             require(env["desc"] == "OK", str(env))
         else:
-            require(env["data"] is None, str(env))
+            require(env.get("data") is None, str(env))
             if code == "BOOKING_CONFLICT":
                 require(env["desc"] == "时段已有预约", str(env))
-        return env["data"]
+        return env["data"] if code == "000000" else None
 
     def record(row, user, slot):
         require(isinstance(row.get("id"), str) and row["id"], str(row))
@@ -71,7 +71,7 @@ def run(base):
         return row
 
     def listing(slot, rows):
-        require(expect(call("GET", "carol", slot), 200) == rows, f"unexpected listing for {slot}")
+        require(expect(call("GET", "carol", slot)) == rows, f"unexpected listing for {slot}")
 
     def race(attempts):
         barrier = Barrier(2)
@@ -83,51 +83,51 @@ def run(base):
 
     with ExitStack() as cleanup:
         def track(row):
-            cleanup.callback(lambda: expect(call("DELETE", row["user"], rid=row["id"]), 200))
+            cleanup.callback(lambda: expect(call("DELETE", row["user"], rid=row["id"])))
             return row
 
         for slot in [SPAN, B]:
             listing(slot, [])
         for identity in (None, "guest"):
-            expect(call("POST", identity, A, "unknown"), 403, "FORBIDDEN")
-        expect(call("POST", "alice", A), 400, "INVALID_INPUT")
-        expect(call("POST", "alice", dict(A, end=A["start"]), "bad"), 400, "INVALID_INPUT")
-        expect(call("GET", payload={"env": "env-a"}), 400, "INVALID_INPUT")
+            expect(call("POST", identity, A, "unknown"), "FORBIDDEN")
+        expect(call("POST", "alice", A), "INVALID_INPUT")
+        expect(call("POST", "alice", dict(A, end=A["start"]), "bad"), "INVALID_INPUT")
+        expect(call("GET", payload={"env": "env-a"}), "INVALID_INPUT")
 
         users = ["alice", "bob"]
         attempts = [(u, A, "competition") for u in users]
         replies = race(attempts)
-        winners = [i for i, (status, _) in enumerate(replies) if status == 201]
+        winners = [i for i, (_, body) in enumerate(replies) if body.get("code") == "000000"]
         require(len(winners) == 1, "expected exactly one creator")
         i = winners[0]
         winner, other = users[i], users[1-i]
-        first = track(record(expect(replies[i], 201), winner, A))
-        expect(replies[1-i], 409, "BOOKING_CONFLICT")
-        expect(call("POST", other, A, "blocked-only"), 409, "BOOKING_CONFLICT")
-        replay = expect(call("POST", winner, dict(reversed(list(A.items()))), "competition"), 200)
+        first = track(record(expect(replies[i]), winner, A))
+        expect(replies[1-i], "BOOKING_CONFLICT")
+        expect(call("POST", other, A, "blocked-only"), "BOOKING_CONFLICT")
+        replay = expect(call("POST", winner, dict(reversed(list(A.items()))), "competition"))
         require(first == replay, "replay changed record")
         zoned = dict(A, start="2030-01-02T18:00:00+08:00", end="2030-01-02T19:00:00+08:00")
-        require(expect(call("POST", winner, zoned, "competition"), 200) == first, "UTC replay differed")
-        expect(call("POST", winner, NEXT, "competition"), 409, "KEY_REUSED")
+        require(expect(call("POST", winner, zoned, "competition")) == first, "UTC replay differed")
+        expect(call("POST", winner, NEXT, "competition"), "KEY_REUSED")
         listing(A, [first])
 
-        twins = sorted(race([("carol", NEXT, "adjacent")] * 2), key=lambda pair: pair[0])
-        adjacent = track(record(expect(twins[1], 201), "carol", NEXT))
-        require(expect(twins[0], 200) == adjacent, "same-key concurrent replay differed")
-        isolated = track(record(expect(call("POST", other, B, "competition"), 201), other, B))
+        twins = race([("carol", NEXT, "adjacent")] * 2)
+        adjacent = track(record(expect(twins[1]), "carol", NEXT))
+        require(expect(twins[0]) == adjacent, "same-key concurrent replay differed")
+        isolated = track(record(expect(call("POST", other, B, "competition")), other, B))
         require(len({r["id"] for r in (first, adjacent, isolated)}) == 3, "duplicate booking IDs")
         listing(A, [first])
         listing(NEXT, [adjacent])
         listing(SPAN, [first, adjacent])
         listing(B, [isolated])
-        expect(call("DELETE", other, rid=first["id"]), 403, "FORBIDDEN")
+        expect(call("DELETE", other, rid=first["id"]), "FORBIDDEN")
         listing(A, [first])
         for _ in range(2):
-            cancelled = expect(call("DELETE", winner, rid=first["id"]), 200)
+            cancelled = expect(call("DELETE", winner, rid=first["id"]))
             require(cancelled == dict(first, status="cancelled"), "unexpected cancellation")
         listing(SPAN, [adjacent])
         listing(B, [isolated])
-        replacement = track(record(expect(call("POST", other, A, "released"), 201), other, A))
+        replacement = track(record(expect(call("POST", other, A, "released")), other, A))
         listing(A, [replacement])
     for slot in [SPAN, B]:
         listing(slot, [])
