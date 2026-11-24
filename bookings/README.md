@@ -11,3 +11,5 @@
 页面验收使用 Chrome DevTools MCP 打开 /aisol-env-booking-web/，选择 alice 和 env-a，在预约页创建固定时段。切换 bob 尝试重叠预约，记录冲突提示与原行。核对相邻时段与 env-b，切回所有者取消并刷新。逐项保留可见结果、Network 请求及 Console。记录 Web/API/QA SHA 和 API 为真实路由或契约桩。
 
 真实 MySQL 验收另需专库连接。通过结构化查询与绑定参数核对并发后的业务行、幂等记录、取消状态与失败事务的写入。
+
+真库核验命令：先把对候测 API 的完整 stdout 保存为 run.log。在同组合 API 检出的 go.mod 所在目录，注入专库只读 DSN 环境变量 BOOKING_QA_MYSQL_DSN，执行 `go run /path/to/qa/bookings/dbcheck.go /path/to/run.log`。脚本只接受成功的外部目标运行日志。用 sqrl 按本轮身份、键及预约 ID 绑定查询，逐条核对缓存成功响应、失败专用键未残留、预约取消后的归属与精确时间；不会输出 DSN。

@@ -103,6 +103,7 @@ def run(base):
         winner, other = users[i], users[1-i]
         first = track(record(expect(replies[i], 201), winner, A))
         expect(replies[1-i], 409, "BOOKING_CONFLICT")
+        expect(call("POST", other, A, "blocked-only"), 409, "BOOKING_CONFLICT")
         replay = expect(call("POST", winner, dict(reversed(list(A.items()))), "competition"), 200)
         require(first == replay, "replay changed record")
         expect(call("POST", winner, NEXT, "competition"), 409, "KEY_REUSED")
