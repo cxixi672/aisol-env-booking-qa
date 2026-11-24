@@ -10,10 +10,15 @@ parser.add_argument('api', type=Path, help='tested API worktree root')
 args = parser.parse_args()
 api = args.api.resolve()
 source = Path(__file__).with_name('waitlist_test.go').resolve()
+helper = Path(__file__).resolve().parents[2] / "integration/guards/router_test.go"
 with tempfile.TemporaryDirectory() as tmp:
     overlay = Path(tmp) / 'overlay.json'
     target = api / 'internal/controller/diwu63_waitlist_qa_test.go'
-    overlay.write_text(json.dumps({'Replace': {str(target): str(source)}}))
+    replacements = {
+        str(target): str(source),
+        str(target.with_name("qa_guard_router_test.go")): str(helper),
+    }
+    overlay.write_text(json.dumps({"Replace": replacements}))
     subprocess.run(['go', 'test', '-mod=readonly', '-overlay', str(overlay), '-count=1',
                     '-v', './internal/controller', '-run', '^TestDIWU63WaitlistBoundary$'],
                    cwd=api, check=True)

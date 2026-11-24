@@ -14,4 +14,4 @@
 
 真库核验命令：先把对候测 API 的完整 stdout 保存为 run.log。在同组合 API 检出的 go.mod 所在目录，注入专库只读 DSN 环境变量 BOOKING_QA_MYSQL_DSN，执行 `go run /path/to/qa/bookings/dbcheck.go /path/to/run.log`。脚本只接受成功的外部目标运行日志。用 sqrl 按本轮身份、键及预约 ID 绑定查询，逐条核对缓存成功响应、失败专用键未残留、预约取消后的归属与精确时间；不会输出 DSN。
 
-无 MySQL 时另跑真实 Gin 路由的前置校验：`python3 bookings/guards.py /path/to/api-candidate`。Go overlay 将七个 httptest 用例挂入候测模块；直接走候测 RegisterSlotRoutes 和预约服务，检查拒绝发生在仓储调用前。
+无 MySQL 时另跑真实 Gin 路由的前置校验：`python3 bookings/guards.py /path/to/api-candidate`。Go overlay 将七个 httptest 用例挂入候测模块；三组 guard 共用 integration/guards/router_test.go 组装的 SDK 路由，执行候测身份中间件和具名 Controller，检查拒绝发生在仓储调用前。

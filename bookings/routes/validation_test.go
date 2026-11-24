@@ -5,16 +5,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"aisol-env-booking-api/internal/controller"
-	"aisol-env-booking-api/internal/repository"
-	"aisol-env-booking-api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 func TestDIWU70Guards(t *testing.T) {
-	router := gin.New()
-	controller.RegisterSlotRoutes(router.Group("/api"), repository.Bookings, nil, service.NewBookings(nil, nil))
+	router := guardRouter()
 	const path = "/api/bookings"
 	const body = `{"env":"env-a","start":"2030-01-02T10:00:00Z","end":"2030-01-02T11:00:00Z"}`
 	for _, tc := range []struct {

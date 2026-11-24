@@ -5,18 +5,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"aisol-env-booking-api/internal/controller"
-	"aisol-env-booking-api/internal/repository"
-	"aisol-env-booking-api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 // These rejections must complete before any repository operation.
 func TestDIWU63WaitlistBoundary(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	controller.RegisterSlotRoutes(engine.Group("/api"), repository.Waitlist, nil, service.NewWaitlist(nil))
+	engine := guardRouter()
 	const path = "/api/waitlist"
 	const valid = `{"env":"env-a","start":"2030-01-02T10:00:00Z","end":"2030-01-02T11:00:00Z"}`
 	for _, c := range []struct {
