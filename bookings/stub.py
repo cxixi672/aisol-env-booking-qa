@@ -1,7 +1,8 @@
 """Loopback-only booking HTTP fixture. No persistence or database calls."""
 import argparse
 import json
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock
 from urllib.parse import parse_qs, urlsplit
@@ -10,17 +11,20 @@ ROUTE = "/api/bookings"
 USERS = {"alice", "bob", "carol", "admin"}
 
 
-def valid_slot(body):
+def normalize_slot(body):
     if not isinstance(body, dict) or body.get("env") not in ("env-a", "env-b"):
-        return False
+        return None
+    slot = {"env": body["env"]}
     try:
         for key in ("start", "end"):
             value = body[key]
-            if datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%dT%H:%M:%SZ") != value:
-                return False
-        return body["start"] < body["end"]
-    except (TypeError, KeyError, ValueError):
-        return False
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])", value):
+                return None
+            utc = datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+            slot[key] = utc.isoformat(timespec="seconds").replace("+00:00", "Z")
+        return slot if slot["start"] < slot["end"] else None
+    except (TypeError, KeyError, ValueError, OverflowError):
+        return None
 
 
 class BookingFixture(ThreadingHTTPServer):
@@ -46,7 +50,8 @@ class BookingFixture(ThreadingHTTPServer):
             return 404, "NOT_FOUND", None
         if method == "GET":
             body = {k: v[0] for k, v in parse_qs(path.query).items()}
-        if not valid_slot(body) or (method == "POST" and not key):
+        body = normalize_slot(body)
+        if body is None or (method == "POST" and not key):
             return 400, "INVALID_INPUT", None
         overlaps = [r.copy() for r in self.rows.values() if r["env"] == body["env"]
                     and r["status"] == "active" and r["start"] < body["end"] and body["start"] < r["end"]]

@@ -106,6 +106,8 @@ def run(base):
         expect(call("POST", other, A, "blocked-only"), 409, "BOOKING_CONFLICT")
         replay = expect(call("POST", winner, dict(reversed(list(A.items()))), "competition"), 200)
         require(first == replay, "replay changed record")
+        zoned = dict(A, start="2030-01-02T18:00:00+08:00", end="2030-01-02T19:00:00+08:00")
+        require(expect(call("POST", winner, zoned, "competition"), 200) == first, "UTC replay differed")
         expect(call("POST", winner, NEXT, "competition"), 409, "KEY_REUSED")
         listing(A, [first])
 
