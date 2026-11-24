@@ -7,15 +7,13 @@ import (
 	"testing"
 
 	"aisol-env-booking-api/internal/controller"
-	"aisol-env-booking-api/internal/repository"
-	"aisol-env-booking-api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 // These requests must return before opening a transaction or accessing the store.
 func TestMaintenanceGuardsDIWU68(t *testing.T) {
 	router := gin.New()
-	controller.RegisterSlotRoutes(router.Group("/api"), repository.Maintenance, nil, service.NewMaintenance(nil, nil))
+	controller.RegisterBookingAPI(router.Group("/api"), nil)
 	for _, c := range []struct {
 		method, path, user, key, body string
 		status                        int
