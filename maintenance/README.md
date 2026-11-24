@@ -21,3 +21,5 @@
 ### Go 路由守卫
 
 运行 `python3 maintenance/route_guards.py /path/to/api`，参数为已合入公共 Gin 路由和维护模块的候测 API 检出。Go overlay 将测试挂到 controller 包，在 Gin 注册生产维护模块，逐个调用 ServeHTTP 并检查 8 个应在访问仓储前返回的请求。输出身份、输入、HTTP 状态与业务响应。本组可在没有 MySQL 时独立执行。
+
+如需在浏览器复验契约桩，单独运行 `python3 -B maintenance/fixture.py --port 19668`。在包含维护路由的 Web 检出中运行 `DEV_API_TARGET=http://127.0.0.1:19668 npm run dev -- --host 127.0.0.1 --port 19669 --strictPort`，打开 `http://127.0.0.1:19669/aisol-env-booking-web/maintenance`。若端口已用，给本卡另选一对空闲端口。

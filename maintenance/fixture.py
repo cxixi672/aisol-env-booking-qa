@@ -5,7 +5,7 @@ from threading import Lock
 from urllib.parse import parse_qsl, urlsplit
 
 
-def server():
+def server(port=0):
     rows = {"bookings": [], "maintenance": []}
     replay = {}
     mutex = Lock()
@@ -62,7 +62,11 @@ def server():
         def handle_request(self):
             with mutex:
                 status, code, data = self.dispatch()
-                desc = {"000000": "OK", "BOOKING_CONFLICT": "时段已有预约"}.get(code, code)
+                desc = {
+                    "000000": "OK", "BOOKING_CONFLICT": "时段已有预约",
+                    "MAINTENANCE_CONFLICT": "时段处于维护窗口", "KEY_REUSED": "幂等键已用于不同请求",
+                    "INVALID_INPUT": "请求参数无效", "NOT_FOUND": "记录不存在", "FORBIDDEN": "无权限",
+                }[code]
                 body = json.dumps(dict(code=code, desc=desc, data=data)).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
@@ -72,4 +76,14 @@ def server():
 
         do_POST = do_GET = do_DELETE = handle_request
 
-    return ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    return ThreadingHTTPServer(("127.0.0.1", port), Handler)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=0)
+    with server(parser.parse_args().port) as httpd:
+        print(f"Contract fixture http://127.0.0.1:{httpd.server_port}", flush=True)
+        httpd.serve_forever()
