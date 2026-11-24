@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -74,8 +75,9 @@ func readRun(path string) (map[identity]*record, error) {
 }
 
 func verify(ctx context.Context, db *sql.DB, k identity, want *record) error {
+	digest := sha256.Sum256([]byte(k.key))
 	q := sqrl.Select("response").From("idempotency_keys").Where(sqrl.Eq{
-		"user_id": k.user, "resource": "bookings", "request_key": []byte(k.key),
+		"user_id": k.user, "resource": "bookings", "request_key": digest[:],
 	})
 	query, args, err := q.ToSql()
 	if err != nil {
