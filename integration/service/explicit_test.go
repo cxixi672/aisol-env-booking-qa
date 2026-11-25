@@ -24,8 +24,9 @@ func TestExplicitOperator(t *testing.T) {
 	store := repository.DataSourceInit(sqla.DatabaseConfig{Type: "mysql", Dsn: dsn, MaxOpenConns: 2, MaxIdleConns: 2})
 	t.Cleanup(func() { _ = store.Close() })
 	queue := service.NewWaitlist(store)
-	bookings := service.NewBookings(store, queue.Promote)
-	maintenance := service.NewMaintenance(store, queue.Promote)
+	deps := service.SlotDependencies{Store: store, Release: queue.Promote}
+	bookings := service.NewBookings(deps)
+	maintenance := service.NewMaintenance(deps)
 	ctx := context.Background()
 	start := time.Date(2032, 1, 2, 10, 0, 0, 0, time.UTC).Unix()
 	slot := dto.Slot{Env: "env-b", Start: start, End: start + 3600}
