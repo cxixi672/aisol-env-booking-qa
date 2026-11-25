@@ -18,6 +18,7 @@ func TestDIWU63WaitlistBoundary(t *testing.T) {
 	}{
 		{"anonymous", "GET", "", "", "", "", "FORBIDDEN"},
 		{"unknown", "POST", "", valid, "someone", "test", "FORBIDDEN"},
+		{"extra identity field", "POST", "", strings.Replace(valid, "{", `{"user":"alice",`, 1), "bob", "test", "INVALID_INPUT"},
 		{"missing key", "POST", "", valid, "bob", "", "INVALID_INPUT"},
 		{"missing query fields", "GET", "?env=env-a", "", "bob", "", "INVALID_INPUT"},
 		{"empty interval", "POST", "", strings.Replace(valid, "11:00", "10:00", 1), "bob", "test", "INVALID_INPUT"},

@@ -14,6 +14,7 @@ func TestMaintenanceGuardsDIWU68(t *testing.T) {
 		method, path, user, key, body string
 		code                          string
 	}{
+		{"POST", "/api/maintenance", "admin", "qa", `{"env":"env-a","start":"2030-01-02T10:00:00Z","end":"2030-01-02T11:00:00Z","user":"alice"}`, "INVALID_INPUT"},
 		{"GET", "/api/maintenance", "", "", "", "FORBIDDEN"},
 		{"GET", "/api/maintenance", "unknown", "", "", "FORBIDDEN"},
 		{"GET", "/api/maintenance?env=env-a", "alice", "", "", "INVALID_INPUT"},

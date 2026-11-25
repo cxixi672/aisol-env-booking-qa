@@ -18,6 +18,7 @@ func TestDIWU70Guards(t *testing.T) {
 		{"missing-user", "GET", path, "", "", "", "FORBIDDEN"},
 		{"unknown-user", "POST", path, "guest", "k", body, "FORBIDDEN"},
 		{"no-key", "POST", path, "alice", "", body, "INVALID_INPUT"},
+		{"extra-identity-field", "POST", path, "alice", "k", strings.Replace(body, "{", `{"user":"bob",`, 1), "INVALID_INPUT"},
 		{"empty-slot", "POST", path, "alice", "k", strings.Replace(body, "11:00", "10:00", 1), "INVALID_INPUT"},
 		{"unknown-env", "POST", path, "alice", "k", strings.Replace(body, "env-a", "env-c", 1), "INVALID_INPUT"},
 		{"missing-range", "GET", path + "?env=env-a", "alice", "", "", "INVALID_INPUT"},

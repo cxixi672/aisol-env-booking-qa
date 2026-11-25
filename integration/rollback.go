@@ -96,9 +96,11 @@ func (f fixture) state(table, id string) (string, error) {
 	return status, err
 }
 
-func (f fixture) check() (err error) {
+type releaseCase struct{ resource, operator string }
+
+func (f fixture) check(c releaseCase) (err error) {
 	// Use a fresh, migrated isolated test database with no active bookings or queue for this slot.
-	booking, err := f.request("POST", "/bookings", "alice", "000000")
+	release, err := f.request("POST", "/"+c.resource, c.operator, "000000")
 	if err != nil {
 		return err
 	}
@@ -123,11 +125,11 @@ func (f fixture) check() (err error) {
 		return e
 	}
 	defer func() { err = errors.Join(err, cleanup()) }()
-	path := "/bookings/" + booking.ID
-	if _, err = f.request("DELETE", path, "alice", "INTERNAL_ERROR"); err != nil {
+	path := "/" + c.resource + "/" + release.ID
+	if _, err = f.request("DELETE", path, c.operator, "INTERNAL_ERROR"); err != nil {
 		return err
 	}
-	for _, check := range []struct{ table, id, want string }{{"bookings", booking.ID, "active"}, {"waitlist", q.ID, "waiting"}} {
+	for _, check := range []struct{ table, id, want string }{{c.resource, release.ID, "active"}, {"waitlist", q.ID, "waiting"}} {
 		got, e := f.state(check.table, check.id)
 		if e != nil {
 			return e
@@ -139,7 +141,7 @@ func (f fixture) check() (err error) {
 	if err = cleanup(); err != nil {
 		return err
 	}
-	if _, err = f.request("DELETE", path, "alice", "000000"); err != nil {
+	if _, err = f.request("DELETE", path, c.operator, "000000"); err != nil {
 		return err
 	}
 	query, args, err := sqrl.Select("booking_id").From("waitlist").Where(sqrl.Eq{"id": q.ID, "status": "promoted"}).ToSql()
@@ -170,9 +172,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	f := fixture{fmt.Sprintf("http://127.0.0.1:%d/api", *port), fmt.Sprintf("rollback-%d", time.Now().UnixNano()), db, ctx, map[string]string{"env": "env-a", "start": "2030-01-04T10:00:00Z", "end": "2030-01-04T11:00:00Z"}}
-	if err = f.check(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	for _, c := range []releaseCase{{resource: "bookings", operator: "alice"}, {resource: "maintenance", operator: "admin"}} {
+		f.key = fmt.Sprintf("rollback-%s-%d", c.resource, time.Now().UnixNano())
+		if err = f.check(c); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("PASS", c.resource, "release rollback, retry and promotion")
 	}
-	fmt.Println("PASS release rollback, retry and promotion")
 }
