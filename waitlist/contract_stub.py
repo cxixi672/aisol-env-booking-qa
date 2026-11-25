@@ -36,6 +36,15 @@ class Fixture:
         _, prefix, resource, *ids = route.split('/')
         if prefix != 'api' or resource not in self.rows:
             return 'NOT_FOUND', None
+        if method == 'POST' and ids:
+            if ids == ['list']:
+                method = 'GET'
+            elif ids == ['cancel'] and resource != 'waitlist':
+                if not isinstance(slot, dict) or type(slot.get('id')) is not int or slot['id'] < 1:
+                    return 'INVALID_INPUT', None
+                method, ids = 'DELETE', [str(slot['id'])]
+            elif ids != ['create']:
+                return 'NOT_FOUND', None
         if user not in ('alice', 'bob', 'carol', 'admin'):
             return 'FORBIDDEN', None
         if method != 'GET' and resource == 'maintenance' and user != 'admin':
