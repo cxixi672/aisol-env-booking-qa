@@ -29,6 +29,8 @@ def compatibility(legacy, canonical, day):
         return client.add('bookings', 'alice', full, 'shared')
 
     expect(legacy.rows('bookings', 'alice', full), [])
+    canonical.call('POST', 'bookings', 'alice', dict(full, user='bob'), 'INVALID_INPUT', 'invalid-owner')
+    canonical.call('POST', 'maintenance', 'bob', full, 'FORBIDDEN', 'regular-maintenance')
     with ThreadPoolExecutor(max_workers=2) as pool:
         first, replay = pool.map(create, (legacy, canonical))
     expect(first, replay)

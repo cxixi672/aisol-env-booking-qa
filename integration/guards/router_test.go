@@ -16,10 +16,10 @@ func guardRouter() http.Handler {
 	admin := controller.PrepareRequest(controller.AdminAccess)
 	server.GET("/bookings", controller.ListBookingsController, user)
 	server.POST("/bookings", controller.CreateBookingController, user)
-	server.DELETE("/bookings/:id", controller.CancelBookingController, user)
+	server.DELETE("/bookings/:id", controller.CancelLegacyBookingController, user)
 	server.GET("/maintenance", controller.ListMaintenanceController, user)
 	server.POST("/maintenance", controller.CreateMaintenanceController, admin)
-	server.DELETE("/maintenance/:id", controller.CancelMaintenanceController, admin)
+	server.DELETE("/maintenance/:id", controller.CancelLegacyMaintenanceController, admin)
 	server.GET("/waitlist", controller.ListWaitlistController, user)
 	server.POST("/waitlist", controller.CreateWaitlistController, user)
 	return server.Svr.Engine
